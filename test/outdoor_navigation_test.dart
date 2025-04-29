@@ -1,13 +1,19 @@
+import 'package:outdoor_navigation/outdoor_navigation.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('A group of tests', () {
+  group('Test group', () {
+    OutdoorNavigation? outdoorNavigation;
     setUp(() {
-      // Additional setup goes here.
+      outdoorNavigation = OutdoorNavigationProvider.getOutdoorNavigation();
     });
 
-    test('First Test', () {
-      expect(true, isTrue);
+    test('Provider Test', () {
+      expect(outdoorNavigation, isNotNull);
+    });
+
+    tearDown(() {
+      outdoorNavigation = null;
     });
   });
 }
