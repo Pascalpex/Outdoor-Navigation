@@ -10,7 +10,17 @@ dependencies:
   flutter:
     sdk: flutter
   location: ^8.0.0
+  plugin_platform_interface: ^2.1.8
 
 dev_dependencies:
   lints: ^5.0.0
   test: ^1.25.15
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: de.hhn.outdoor_navigation
+        pluginClass: GnssPlugin
+      ios:
+        pluginClass: GnssPlugin
