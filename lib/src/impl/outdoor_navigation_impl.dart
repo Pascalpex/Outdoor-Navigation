@@ -1,5 +1,4 @@
 import 'package:location/location.dart';
-import 'package:outdoor_navigation/outdoor_navigation.dart';
 import 'package:outdoor_navigation/src/abstract_outdoor_navigation.dart';
 import 'package:outdoor_navigation/src/model/location.dart';
 
