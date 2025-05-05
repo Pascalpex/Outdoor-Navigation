@@ -10,6 +10,6 @@ class HHNLocation {
     if (!valid) {
       return "Invalid location";
     }
-    return "Latitude: {$latitude}, Longitude: {$longitude}";
+    return "Latitude: $latitude, Longitude: $longitude";
   }
 }
