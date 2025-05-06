@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:outdoor_navigation/outdoor_navigation.dart';
 
 void main() {
@@ -29,7 +30,7 @@ class _MainAppState extends State<MainApp> {
                     future: outdoorNavigation.getLocation(),
                     builder: (context, snapshot) {
                       if (snapshot.hasData) {
-                        HHNLocation location = snapshot.data!;
+                        LatLng location = snapshot.data!;
                         return Text(location.toString());
                       } else {
                         return CircularProgressIndicator();

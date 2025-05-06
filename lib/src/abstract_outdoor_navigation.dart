@@ -1,5 +1,5 @@
-import 'model/location.dart';
+import 'package:latlong2/latlong.dart';
 
 abstract class OutdoorNavigation {
-  Future<HHNLocation> getLocation();
+  Future<LatLng?> getLocation();
 }
