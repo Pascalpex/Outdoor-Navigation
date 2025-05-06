@@ -60,13 +60,29 @@ class GnssPlugin : FlutterPlugin, EventChannel.StreamHandler, ActivityAware {
                         "svid" to it.svid,
                         "cn0DbHz" to it.cn0DbHz,
                         "constellationType" to it.constellationType,
-                        "pseudorangeRateMetersPerSecond" to it.pseudorangeRateMetersPerSecond
+                        "pseudorangeRateMetersPerSecond" to it.pseudorangeRateMetersPerSecond,
+                        "accumulatedDeltaRangeMeters" to it.accumulatedDeltaRangeMeters,
+                        "accumulatedDeltaRangeState" to it.accumulatedDeltaRangeState,
+                        "accumulatedDeltaRangeUncertaintyMeters" to it.accumulatedDeltaRangeUncertaintyMeters,
+                        "basebandCn0DbHz" to it.basebandCn0DbHz,
+                        "carrierFrequencyHz" to it.carrierFrequencyHz,
+                        "codeType" to it.codeType,
+                        "fullInterSignalBiasNanos" to it.fullInterSignalBiasNanos,
+                        "fullInterSignalBiasUncertaintyNanos" to it.fullInterSignalBiasUncertaintyNanos,
+                        "multipathIndicator" to it.multipathIndicator,
+                        "pseudorangeRateUncertaintyMetersPerSecond" to it.pseudorangeRateUncertaintyMetersPerSecond,
+                        "receivedSvTimeNanos" to it.receivedSvTimeNanos,
+                        "receivedSvTimeUncertaintyNanos" to it.receivedSvTimeUncertaintyNanos,
+                        "satelliteInterSignalBiasNanos" to it.satelliteInterSignalBiasNanos,
+                        "satelliteInterSignalBiasUncertaintyNanos" to it.satelliteInterSignalBiasUncertaintyNanos,
+                        "snrInDb" to it.snrInDb,
+                        "state" to it.state,
+                        "timeOffsetNanos" to it.timeOffsetNanos
                     )
                 }
 
                 val data = mapOf("measurements" to measurements)
 
-                // Sicherstellen, dass der Aufruf auf dem Main Thread erfolgt
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
                     eventSink?.success(data)
                 }
@@ -83,7 +99,6 @@ class GnssPlugin : FlutterPlugin, EventChannel.StreamHandler, ActivityAware {
         eventSink = null
     }
 
-    // ActivityAware-Schnittstelle – für Zugriff auf Berechtigungen und Activity-Kontext
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
     }
