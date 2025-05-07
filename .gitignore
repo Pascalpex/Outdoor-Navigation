@@ -48,6 +48,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 /android/.gradle
-/gradle
-gradlew*
-local.properties
+/android/gradle
+/android/gradlew*
+/android/local.properties
