@@ -49,4 +49,10 @@ jobs:
 
       - name: Build APK
         working-directory: example
-        run: flutter build apk
+        run: flutter build apk --release
+        
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: example-app-apk
+          path: example/build/app/outputs/flutter-apk/app-release.apk
