@@ -1,0 +1,51 @@
+name: Flutter CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  flutter-package:
+    name: Build & Test Flutter Package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "stable"
+
+      - name: Install Dependencies (Root Package)
+        run: flutter pub get
+
+      - name: Run Flutter Analyze (Style Check)
+        run: flutter analyze
+
+      - name: Run Tests
+        run: flutter test
+
+  flutter-example-app:
+    name: Build Flutter Example App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "stable"
+
+      - name: Install Dependencies (Example App)
+        working-directory: example
+        run: flutter pub get
+
+      - name: Build APK
+        working-directory: example
+        run: flutter build apk
