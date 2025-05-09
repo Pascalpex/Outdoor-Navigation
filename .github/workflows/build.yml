@@ -1,0 +1,58 @@
+name: Flutter CI
+
+env:
+  FLUTTER_VERSION: "3.29.3"
+
+on:
+  push:
+    branches: ["**"]
+
+jobs:
+  flutter-package:
+    name: Analyse & Test Flutter Package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Install Dependencies (Root Package)
+        run: flutter pub get
+
+      - name: Run Flutter Analyze (Style Check)
+        run: flutter analyze
+
+      - name: Run Tests
+        run: flutter test
+
+  flutter-example-app:
+    name: Build Flutter Example App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Install Dependencies (Example App)
+        working-directory: example
+        run: flutter pub get
+
+      - name: Build APK
+        working-directory: example
+        run: flutter build apk --release
+        
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: example-app-apk
+          path: example/build/app/outputs/flutter-apk/app-release.apk
