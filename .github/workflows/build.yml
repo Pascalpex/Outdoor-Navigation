@@ -6,12 +6,10 @@ env:
 on:
   push:
     branches: ["**"]
-  pull_request:
-    branches: ["**"]
 
 jobs:
   flutter-package:
-    name: Build & Test Flutter Package
+    name: Analyse & Test Flutter Package
     runs-on: ubuntu-latest
 
     steps:
