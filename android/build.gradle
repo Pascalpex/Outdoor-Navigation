@@ -28,7 +28,12 @@ android {
     namespace = "de.hhn.outdoor_navigation"
 
     compileSdk = 35
-
+    ndkVersion = "27.0.12077973"
+    externalNativeBuild {
+        cmake {
+            path "../lib/src/CMakeLists.txt"
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11

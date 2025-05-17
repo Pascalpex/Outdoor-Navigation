@@ -11,7 +11,7 @@ dependencies:
     sdk: flutter
   outdoor_navigation:
   # Depend on direct path
-    path: ./../
+    path: ../
   # Depend on hosted repository
   #  git:
   #    url: https://github.com/Pascalpex/Outdoor-Navigation.git

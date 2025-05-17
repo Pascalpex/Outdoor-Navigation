@@ -1,4 +1,5 @@
 import 'package:latlong2/latlong.dart';
+import 'package:outdoor_navigation/src/model/gnss_satelite.dart';
 
 /// The OutdoorNavigation class provides all outdoor related location services.
 ///
@@ -8,4 +9,6 @@ abstract class OutdoorNavigation {
   ///
   /// Will ask for permission on first usage.
   Future<LatLng?> getLocation();
+
+  Stream<List<GnssSatelite>> getGnssStream();
 }

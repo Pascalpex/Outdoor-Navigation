@@ -1,6 +1,8 @@
 import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
 import 'package:outdoor_navigation/src/abstract_outdoor_navigation.dart';
+import 'package:outdoor_navigation/src/gnss_plugin.dart';
+import 'package:outdoor_navigation/src/model/gnss_satelite.dart';
 
 class OutdoorNavigationImpl implements OutdoorNavigation {
   @override
@@ -13,5 +15,10 @@ class OutdoorNavigationImpl implements OutdoorNavigation {
     } else {
       return null;
     }
+  }
+
+  @override
+  Stream<List<GnssSatelite>> getGnssStream() {
+    return GnssPlugin.gnssStream;
   }
 }
