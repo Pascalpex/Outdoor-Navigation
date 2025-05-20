@@ -1,6 +1,6 @@
 name: outdoor_navigation
 description: Provides outdoor positions
-version: 1.0.0
+version: 1.2
 
 environment:
   sdk: ^3.7.0
