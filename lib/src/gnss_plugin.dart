@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:outdoor_navigation/src/model/gnss_constellation_type.dart';
 import 'package:outdoor_navigation/src/model/gnss_satelite.dart';
 
 class GnssPlugin {
@@ -16,7 +17,7 @@ class GnssPlugin {
         GnssSatelite gnssSatelite = GnssSatelite(
           svid: satelite["svid"],
           cn0DbHz: satelite["cn0DbHz"],
-          constellationType: satelite["constellationType"],
+          constellationType: GnssConstellationTypeExtension.fromInt(satelite["constellationType"]),
           pseudorangeRateMetersPerSecond: satelite["pseudorangeRateMetersPerSecond"],
           accumulatedDeltaRangeMeters: satelite["accumulatedDeltaRangeMeters"],
           accumulatedDeltaRangeState: satelite["accumulatedDeltaRangeState"],

@@ -1,7 +1,9 @@
+import 'gnss_constellation_type.dart';
+
 class GnssSatelite {
   final int svid;
   final double cn0DbHz;
-  final int constellationType;
+  final GnssConstellationType constellationType;
   final double pseudorangeRateMetersPerSecond;
   final double accumulatedDeltaRangeMeters;
   final int accumulatedDeltaRangeState;
