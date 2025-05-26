@@ -55,8 +55,10 @@ class GnssPlugin : FlutterPlugin, EventChannel.StreamHandler, ActivityAware {
 
         gnssCallback = object : GnssMeasurementsEvent.Callback() {
             override fun onGnssMeasurementsReceived(event: GnssMeasurementsEvent) {
+
                 val measurements = event.measurements.map {
                     mapOf(
+
                         "svid" to it.svid,
                         "cn0DbHz" to it.cn0DbHz,
                         "constellationType" to it.constellationType,
@@ -77,7 +79,7 @@ class GnssPlugin : FlutterPlugin, EventChannel.StreamHandler, ActivityAware {
                         "satelliteInterSignalBiasUncertaintyNanos" to it.satelliteInterSignalBiasUncertaintyNanos,
                         "snrInDb" to it.snrInDb,
                         "state" to it.state,
-                        "timeOffsetNanos" to it.timeOffsetNanos
+                        "timeOffsetNanos" to it.timeOffsetNanos,
                     )
                 }
 

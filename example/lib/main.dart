@@ -32,7 +32,7 @@ class _MainAppState extends State<MainApp> {
   @override
   Widget build(BuildContext context) {
     outdoorNavigation.getGnssStream();
-    _bindings.stopServer();
+    _bindings.initServer();
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(
@@ -41,6 +41,8 @@ class _MainAppState extends State<MainApp> {
           padding: const EdgeInsets.all(20.0),
           child: Column(
             children: [
+              TextButton(onPressed: () => _bindings.startServer(), child: Text("start Server")),
+              TextButton(onPressed: () => _bindings.stopServer(), child: Text("stop Server")),
               Center(
                 child: StreamBuilder<List<GnssSatelite>>(
                   stream: outdoorNavigation.getGnssStream(),

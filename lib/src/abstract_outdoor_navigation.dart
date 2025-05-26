@@ -11,4 +11,6 @@ abstract class OutdoorNavigation {
   Future<LatLng?> getLocation();
 
   Stream<List<GnssSatelite>> getGnssStream();
+
+  Future<void> startRTKServer();
 }

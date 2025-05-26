@@ -1,5 +1,6 @@
 import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
+import 'package:outdoor_navigation/outdoor_navigation.dart';
 import 'package:outdoor_navigation/src/abstract_outdoor_navigation.dart';
 import 'package:outdoor_navigation/src/gnss_plugin.dart';
 import 'package:outdoor_navigation/src/model/gnss_satelite.dart';
@@ -20,5 +21,12 @@ class OutdoorNavigationImpl implements OutdoorNavigation {
   @override
   Stream<List<GnssSatelite>> getGnssStream() {
     return GnssPlugin.gnssStream;
+  }
+
+  @override
+  Future<void> startRTKServer() {
+    final RtklibBindings rtklibBindings = RtklibBindings();
+    rtklibBindings.startServer();
+    return Future.value();
   }
 }

@@ -69,6 +69,7 @@ add_library(gnss_rtklib SHARED
         ${rtklib_sources_SOURCE_DIR}/src/rcv/javad.c
         ${rtklib_sources_SOURCE_DIR}/src/rcv/swiftnav.c
         ${rtklib_sources_SOURCE_DIR}/src/lambda.c
+        ${rtklib_sources_SOURCE_DIR}/src/options.c
 )
 
 # --- Compiler Configuration ---
