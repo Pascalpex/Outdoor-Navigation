@@ -21,11 +21,16 @@ class _MainAppState extends State<MainApp> {
   bool locationRequested = false;
   final RtklibBindings _bindings = RtklibBindings();
   StreamSubscription<List<GnssSatelite>>? _gnssStreamSubscription;
+  StreamSubscription<NmeaMessage>? _nmeaStreamSubscription;
 
   void _subToGnssStream() {
-    _gnssStreamSubscription = outdoorNavigation.getGnssStream().listen((List<GnssSatelite> gnssSatellites) async {
+    /* _gnssStreamSubscription = outdoorNavigation.getGnssStream().listen((List<GnssSatelite> gnssSatellites) async {
       // Handle the GNSS data here
       print("Received GNSS data: $gnssSatellites");
+    }); */
+    _nmeaStreamSubscription = outdoorNavigation.getNmeaStream().listen((NmeaMessage nmeaMessages) {
+      // Handle the NMEA data here
+      print("Received NMEA data: ${nmeaMessages.toString()}");
     });
   }
 

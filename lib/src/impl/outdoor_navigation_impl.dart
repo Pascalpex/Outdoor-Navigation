@@ -24,6 +24,11 @@ class OutdoorNavigationImpl implements OutdoorNavigation {
   }
 
   @override
+  Stream<NmeaMessage> getNmeaStream() {
+    return GnssPlugin.nmeaStream;
+  }
+
+  @override
   Future<void> startRTKServer() {
     final RtklibBindings rtklibBindings = RtklibBindings();
     rtklibBindings.startServer();

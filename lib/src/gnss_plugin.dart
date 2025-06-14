@@ -1,9 +1,11 @@
 import 'package:flutter/services.dart';
 import 'package:outdoor_navigation/src/model/gnss_constellation_type.dart';
 import 'package:outdoor_navigation/src/model/gnss_satelite.dart';
+import 'package:outdoor_navigation/src/model/nmea_message.dart';
 
 class GnssPlugin {
   static const EventChannel _gnssStream = EventChannel('gnss_plugin/raw_stream');
+  static const EventChannel _nmeaChannel = EventChannel('gnss_plugin/nmea_stream');
 
   static Stream<dynamic> get _internalGnssStream {
     return _gnssStream.receiveBroadcastStream();
@@ -40,6 +42,12 @@ class GnssPlugin {
         satelites.add(gnssSatelite);
       }
       return satelites;
+    });
+  }
+
+  static Stream<NmeaMessage> get nmeaStream {
+    return _nmeaChannel.receiveBroadcastStream().map((event) {
+      return NmeaMessage(timestamp: event["timestamp"], message: event["message"]);
     });
   }
 }

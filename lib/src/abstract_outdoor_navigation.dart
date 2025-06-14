@@ -1,5 +1,5 @@
 import 'package:latlong2/latlong.dart';
-import 'package:outdoor_navigation/src/model/gnss_satelite.dart';
+import 'package:outdoor_navigation/outdoor_navigation.dart';
 
 /// The OutdoorNavigation class provides all outdoor related location services.
 ///
@@ -11,6 +11,8 @@ abstract class OutdoorNavigation {
   Future<LatLng?> getLocation();
 
   Stream<List<GnssSatelite>> getGnssStream();
+
+  Stream<NmeaMessage> getNmeaStream();
 
   Future<void> startRTKServer();
 }

@@ -6,15 +6,21 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.GnssMeasurementsEvent
 import android.location.LocationManager
+import android.location.OnNmeaMessageListener
 import androidx.core.app.ActivityCompat
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.EventChannel
 
-class GnssPlugin : FlutterPlugin, EventChannel.StreamHandler, ActivityAware {
-    private lateinit var eventChannel: EventChannel
-    private var eventSink: EventChannel.EventSink? = null
+
+class GnssPlugin : FlutterPlugin, ActivityAware {
+    private lateinit var gnssEventChannel: EventChannel
+    private lateinit var nmeaEventChannel: EventChannel
+
+    private var gnssEventSink: EventChannel.EventSink? = null
+    private var nmeaEventSink: EventChannel.EventSink? = null
+
 
     private var context: Context? = null
     private var activity: Activity? = null
@@ -24,22 +30,35 @@ class GnssPlugin : FlutterPlugin, EventChannel.StreamHandler, ActivityAware {
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
 
-        eventChannel = EventChannel(binding.binaryMessenger, "gnss_plugin/raw_stream")
-        eventChannel.setStreamHandler(this)
+        gnssEventChannel = EventChannel(binding.binaryMessenger, "gnss_plugin/raw_stream")
+        gnssEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                gnssEventSink = events
+                startGnssListening()
+            }
+
+            override fun onCancel(arguments: Any?) {
+                gnssEventSink = null
+                stopGnssListening()
+            }
+        })
+
+        nmeaEventChannel = EventChannel(binding.binaryMessenger, "gnss_plugin/nmea_stream")
+        nmeaEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                nmeaEventSink = events
+            }
+
+            override fun onCancel(arguments: Any?) {
+                nmeaEventSink = null
+            }
+        })
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         stopGnssListening()
-        eventChannel.setStreamHandler(null)
-    }
-
-    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-        eventSink = events
-        startGnssListening()
-    }
-
-    override fun onCancel(arguments: Any?) {
-        stopGnssListening()
+        gnssEventChannel.setStreamHandler(null)
+        nmeaEventChannel.setStreamHandler(null)
     }
 
     private fun startGnssListening() {
@@ -57,8 +76,8 @@ class GnssPlugin : FlutterPlugin, EventChannel.StreamHandler, ActivityAware {
             override fun onGnssMeasurementsReceived(event: GnssMeasurementsEvent) {
 
                 val measurements = event.measurements.map {
-                    mapOf(
 
+                    mapOf(
                         "svid" to it.svid,
                         "cn0DbHz" to it.cn0DbHz,
                         "constellationType" to it.constellationType,
@@ -86,19 +105,22 @@ class GnssPlugin : FlutterPlugin, EventChannel.StreamHandler, ActivityAware {
                 val data = mapOf("measurements" to measurements)
 
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    eventSink?.success(data)
+                    gnssEventSink?.success(data)
                 }
             }
         }
-
+        locationManager.addNmeaListener(nmeaListener)
         locationManager.registerGnssMeasurementsCallback(gnssCallback)
+
     }
 
     private fun stopGnssListening() {
         if (::locationManager.isInitialized && ::gnssCallback.isInitialized) {
             locationManager.unregisterGnssMeasurementsCallback(gnssCallback)
+            locationManager.removeNmeaListener(nmeaListener)
         }
-        eventSink = null
+        gnssEventSink = null
+        nmeaEventSink = null
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
@@ -115,5 +137,15 @@ class GnssPlugin : FlutterPlugin, EventChannel.StreamHandler, ActivityAware {
 
     override fun onDetachedFromActivityForConfigChanges() {
         activity = null
+    }
+
+    private val nmeaListener: OnNmeaMessageListener = object : OnNmeaMessageListener {
+        override fun onNmeaMessage(message: String?, timestamp: Long) {
+            message?.let {
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    nmeaEventSink?.success(mapOf("timestamp" to timestamp, "message" to it))
+                }
+            }
+        }
     }
 }
