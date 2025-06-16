@@ -34,6 +34,8 @@ endif()
 add_library(gnss_rtklib SHARED
         # Custom C interface/wrapper.
         ./library/my_interface/rtklib_wrapper.c
+        #./library/rtklib/stream.c
+        #./library/rtklib/rtksvr.c
 
         # Core RTKLIB source files. Add more as needed based on usage.
         ${rtklib_sources_SOURCE_DIR}/src/solution.c

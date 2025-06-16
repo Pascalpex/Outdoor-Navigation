@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "rtklib_wrapper.h": "c"
+        "rtklib_wrapper.h": "c",
+        "rtklib.h": "c"
     }
 }
