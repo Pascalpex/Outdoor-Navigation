@@ -174,11 +174,10 @@ int start_rtk_server(void)
     };
     double ecef_pos[3]; // To store ECEF coordinates
     pos2ecef(lla_pos, ecef_pos);
-    ,
 
-        __android_log_print(ANDROID_LOG_INFO, "MyTestTag",
-                            "NMEA for Caster (LLH input): cycle=%dms, req_type=%d, lla_in=(%.6f, %.6f, %.1f deg/m)",
-                            nmeacycle, nmeareq, lla_pos[0] * R2D, lla_pos[1] * R2D, lla_pos[2]);
+    __android_log_print(ANDROID_LOG_INFO, "MyTestTag",
+                        "NMEA for Caster (LLH input): cycle=%dms, req_type=%d, lla_in=(%.6f, %.6f, %.1f deg/m)",
+                        nmeacycle, nmeareq, lla_pos[0] * R2D, lla_pos[1] * R2D, lla_pos[2]);
     __android_log_print(ANDROID_LOG_INFO, "MyTestTag",
                         "NMEA for Caster (ECEF sent to rtksvrstart): ecef_out=(%.3f, %.3f, %.3f m)",
                         ecef_pos[0], ecef_pos[1], ecef_pos[2]);
