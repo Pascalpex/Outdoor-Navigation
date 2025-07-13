@@ -9,10 +9,6 @@ abstract class OutdoorNavigation {
   ///
   /// Will ask for permission on first usage.
   Future<LatLng?> getLocation();
-
-  Stream<List<GnssSatelite>> getGnssStream();
-
-  Stream<NmeaMessage> getNmeaStream();
-
-  Future<void> startRTKServer();
+  void showLogs();
+  void dispose();
 }

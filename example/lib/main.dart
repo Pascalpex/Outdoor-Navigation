@@ -1,8 +1,7 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:latlong2/latlong.dart';
-import 'package:outdoor_navigation/outdoor_navigation.dart';
+import 'package:latlong2/latlong.dart'; // We'll need this for the location type
+import 'package:outdoor_navigation/outdoor_navigation.dart'; // Your main package import
 
 void main() {
   runApp(const MainApp());
@@ -10,150 +9,130 @@ void main() {
 
 class MainApp extends StatefulWidget {
   const MainApp({super.key});
-
   @override
   State<MainApp> createState() => _MainAppState();
 }
 
 class _MainAppState extends State<MainApp> {
-  OutdoorNavigation outdoorNavigation = OutdoorNavigationProvider.getOutdoorNavigation();
+  late OutdoorNavigation outdoorNavigation;
+  Timer? _locationPollingTimer;
 
-  bool locationRequested = false;
-  final RtklibBindings _bindings = RtklibBindings();
-  StreamSubscription<List<GnssSatelite>>? _gnssStreamSubscription;
-  StreamSubscription<NmeaMessage>? _nmeaStreamSubscription;
+  LatLng? _currentLocation;
+  String _locationStatus = 'Press "Start Polling" to get location.';
+  bool _isPolling = false;
+  bool _isDisposed = true;
 
-  void _subToGnssStream() {
-    /* _gnssStreamSubscription = outdoorNavigation.getGnssStream().listen((List<GnssSatelite> gnssSatellites) async {
-      // Handle the GNSS data here
-      print("Received GNSS data: $gnssSatellites");
-    }); */
-    _nmeaStreamSubscription = outdoorNavigation.getNmeaStream().listen((NmeaMessage nmeaMessages) {
-      // Handle the NMEA data here
-      print("Received NMEA data: ${nmeaMessages.toString()}");
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    _locationPollingTimer?.cancel();
+    if (!_isDisposed) {
+      (outdoorNavigation as dynamic).dispose();
+    }
+    super.dispose();
+  }
+
+  void _initializeNavigationService() {
+    if (_isDisposed) {
+      outdoorNavigation = OutdoorNavigationProvider.getOutdoorNavigation();
+      _isDisposed = false;
+    }
+  }
+
+  void _startLocationPolling() {
+    if (_isPolling) return;
+
+    _initializeNavigationService();
+    _fetchLocation();
+    _locationPollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      _fetchLocation();
     });
+
+    setState(() {
+      _isPolling = true;
+      _locationStatus = 'Polling for location...';
+    });
+  }
+
+  void _stopLocationPolling() {
+    _locationPollingTimer?.cancel();
+    setState(() {
+      _isPolling = false;
+      _locationStatus = 'Polling stopped. RTK service is still active.';
+    });
+  }
+
+  void _stopAndCleanup() {
+    if (_isDisposed) return;
+
+    _locationPollingTimer?.cancel();
+    (outdoorNavigation as dynamic).dispose();
+
+    setState(() {
+      _isPolling = false;
+      _isDisposed = true;
+      _currentLocation = null;
+      _locationStatus = 'All services stopped and cleaned up.';
+    });
+  }
+
+  Future<void> _fetchLocation() async {
+    if (_isDisposed) return;
+
+    final location = await outdoorNavigation.getLocation();
+    if (mounted) {
+      setState(() {
+        _currentLocation = location;
+        if (location == null) {
+          _locationStatus = 'Could not get location fix.';
+        } else {
+          _locationStatus = 'Location Updated!';
+        }
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    outdoorNavigation.getGnssStream();
-    _bindings.initServer();
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
       home: Scaffold(
-        appBar: AppBar(title: const Text("Standort-Abfrage"), backgroundColor: Colors.green[700]),
+        appBar: AppBar(title: const Text("Outdoor Navigation Test")),
         body: Padding(
-          padding: const EdgeInsets.all(20.0),
+          padding: const EdgeInsets.all(16.0),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextButton(onPressed: () => _bindings.startServer(), child: Text("start Server")),
-              TextButton(onPressed: () => _bindings.stopServer(), child: Text("stop Server")),
-              Center(
-                child: StreamBuilder<List<GnssSatelite>>(
-                  stream: outdoorNavigation.getGnssStream(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const CircularProgressIndicator();
-                    } else if (snapshot.hasError) {
-                      return const Text("Fehler beim Abrufen der GNSS-Daten.");
-                    } else if (snapshot.hasData) {
-                      final gnssSatellites = snapshot.data!;
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.satellite, size: 60, color: Colors.blue),
-                          const SizedBox(height: 20),
-                          Text("Anzahl der Satelliten: ${gnssSatellites.length}", style: const TextStyle(fontSize: 18)),
-                          const SizedBox(height: 20),
-                          ElevatedButton(
-                            onPressed: () {
-                              _subToGnssStream();
-                            },
-                            child: const Text("GNSS-Daten abonnieren"),
-                          ),
-                        ],
-                      );
-                    } else {
-                      return const Text("Keine GNSS-Daten verfügbar.");
-                    }
-                  },
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    children: [
+                      Text('Current Location:', style: Theme.of(context).textTheme.titleLarge),
+                      const SizedBox(height: 8),
+                      if (_currentLocation != null)
+                        Text(
+                          'Lat: ${_currentLocation!.latitude.toStringAsFixed(8)}\nLon: ${_currentLocation!.longitude.toStringAsFixed(8)}',
+                          style: const TextStyle(fontFamily: 'monospace', fontSize: 16),
+                          textAlign: TextAlign.center,
+                        ),
+                      const SizedBox(height: 8),
+                      Text(_locationStatus),
+                    ],
+                  ),
                 ),
               ),
-              Center(
-                child:
-                    locationRequested
-                        ? FutureBuilder<LatLng?>(
-                          future: outdoorNavigation.getLocation(),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState == ConnectionState.waiting) {
-                              return const CircularProgressIndicator();
-                            } else if (snapshot.hasError) {
-                              return Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.error, color: Colors.red, size: 60),
-                                  const SizedBox(height: 20),
-                                  const Text("Fehler beim Abrufen des Standorts."),
-                                  const SizedBox(height: 20),
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        locationRequested = false;
-                                      });
-                                    },
-                                    child: const Text("Zurück"),
-                                  ),
-                                ],
-                              );
-                            } else if (snapshot.hasData && snapshot.data != null) {
-                              final location = snapshot.data!;
-                              return Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.location_on, size: 60, color: Colors.green),
-                                  const SizedBox(height: 20),
-                                  Text("Breitengrad: ${location.latitude}", style: const TextStyle(fontSize: 18)),
-                                  Text("Längengrad: ${location.longitude}", style: const TextStyle(fontSize: 18)),
-                                  const SizedBox(height: 20),
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      setState(() {});
-                                    },
-                                    child: const Text("Standort erneut abrufen"),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        locationRequested = false;
-                                      });
-                                    },
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[600]),
-                                    child: const Text("Zurück"),
-                                  ),
-                                ],
-                              );
-                            } else {
-                              return const Text("Keine Standortdaten verfügbar.");
-                            }
-                          },
-                        )
-                        : Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text("Drücke den Button, um deinen Standort abzurufen."),
-                            const SizedBox(height: 20),
-                            ElevatedButton(
-                              onPressed: () {
-                                setState(() {
-                                  locationRequested = true;
-                                });
-                              },
-                              child: const Text("Standort abrufen"),
-                            ),
-                          ],
-                        ),
-              ),
+              const SizedBox(height: 20),
+              ElevatedButton(onPressed: _isPolling ? null : _startLocationPolling, child: const Text('START POLLING')),
+              const SizedBox(height: 10),
+              ElevatedButton(onPressed: !_isPolling ? null : _stopLocationPolling, style: ElevatedButton.styleFrom(backgroundColor: Colors.orange), child: const Text('STOP POLLING')),
+              const SizedBox(height: 10),
+              ElevatedButton(onPressed: _isDisposed ? null : _stopAndCleanup, style: ElevatedButton.styleFrom(backgroundColor: Colors.red), child: const Text('STOP & CLEANUP RTK')),
+              const SizedBox(height: 20),
+              ElevatedButton(onPressed: _isDisposed || !_isPolling ? null : outdoorNavigation.showLogs, child: const Text('Print Satus in LogCat')),
             ],
           ),
         ),

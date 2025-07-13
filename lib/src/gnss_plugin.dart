@@ -4,11 +4,12 @@ import 'package:outdoor_navigation/src/model/gnss_satelite.dart';
 import 'package:outdoor_navigation/src/model/nmea_message.dart';
 
 class GnssPlugin {
-  static const EventChannel _gnssStream = EventChannel('gnss_plugin/raw_stream');
+  static const EventChannel _rawMeasurementsStream = EventChannel('gnss_plugin/raw_stream');
   static const EventChannel _nmeaChannel = EventChannel('gnss_plugin/nmea_stream');
+  static const EventChannel _navMessageStream = EventChannel('gnss_plugin/nav_message_stream');
 
   static Stream<dynamic> get _internalGnssStream {
-    return _gnssStream.receiveBroadcastStream();
+    return _rawMeasurementsStream.receiveBroadcastStream();
   }
 
   static Stream<List<GnssSatelite>> get gnssStream {
@@ -48,6 +49,18 @@ class GnssPlugin {
   static Stream<NmeaMessage> get nmeaStream {
     return _nmeaChannel.receiveBroadcastStream().map((event) {
       return NmeaMessage(timestamp: event["timestamp"], message: event["message"]);
+    });
+  }
+
+  static Stream<Map<String, dynamic>> get rawMeasurmentStream {
+    return _rawMeasurementsStream.receiveBroadcastStream().map((event) {
+      return Map<String, dynamic>.from(event);
+    });
+  }
+
+  static Stream<Map<String, dynamic>> get navMessageStream {
+    return _navMessageStream.receiveBroadcastStream().map((dynamic event) {
+      return Map<String, dynamic>.from(event);
     });
   }
 }

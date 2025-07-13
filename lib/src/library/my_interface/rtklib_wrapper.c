@@ -1,143 +1,98 @@
-#include "rtklib_wrapper.h" // Include your header file for the API
-#include <stdio.h>          // For snprintf or other utilities if needed
-#include <string.h>         // For memset or memcpy if needed
+#include "rtklib_wrapper.h"
+#include "rtklib.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <math.h>
 #include <android/log.h>
-#include <unistd.h> // For usleep
+#include <unistd.h>
+#include <stdarg.h>
 
 #define APPNAME "RTKLIB_WRAPPER"
+#define LOG_TAG "RTKLIB_WRAPPER"
 
+// --- Global server instance ---
 static rtksvr_t svr;
 
-void get_rtk_ntrip_debug_info(RtkNtripDebugInfo *debug_info)
+// --- Helper Functions ---
+static int androidToRtklibSys(int constellationType)
 {
-    if (!debug_info)
+    switch (constellationType)
     {
-        return;
+    case 1:
+        return SYS_GPS;
+    case 3:
+        return SYS_GAL;
+    case 6:
+        return SYS_GLO;
+    default:
+        return SYS_NONE;
     }
-
-    // Initialize the struct
-    memset(debug_info, 0, sizeof(RtkNtripDebugInfo));
-    debug_info->stream_state = -99; // Default to an unlikely state
-
-    // Indices for your NTRIP stream
-    int ntrip_stream_object_idx = 1; // Corresponds to stream_types[1] in your setup
-    int rtksvr_input_buffer_idx = 1; // Corresponds to svr.buff[1], svr.nb[1]
-
-    rtksvrlock(&svr); // LOCK RTK server structure
-
-    debug_info->rtk_server_state = svr.state;
-    debug_info->stream_state = svr.stream[ntrip_stream_object_idx].state;
-    strncpy(debug_info->stream_msg, svr.stream[ntrip_stream_object_idx].msg, MAXSTRMSG - 1);
-    debug_info->stream_msg[MAXSTRMSG - 1] = '\0'; // Ensure null termination
-
-    debug_info->bytes_in_server_buffer = svr.nb[rtksvr_input_buffer_idx];
-
-    if (svr.nb[rtksvr_input_buffer_idx] > 0)
-    {
-        int bytes_to_copy = svr.nb[rtksvr_input_buffer_idx];
-        if (bytes_to_copy > NTRIP_DATA_PEEK_SIZE)
-        {
-            bytes_to_copy = NTRIP_DATA_PEEK_SIZE;
-        }
-        memcpy(debug_info->data_peek_buffer, svr.buff[rtksvr_input_buffer_idx], bytes_to_copy);
-        debug_info->bytes_peeked = bytes_to_copy;
-    }
-    else
-    {
-        debug_info->bytes_peeked = 0;
-    }
-
-    rtksvrunlock(&svr); // UNLOCK RTK server structure
 }
 
+// --- Server Management Functions ---
 void stop_rtk_server(void)
 {
-    __android_log_print(ANDROID_LOG_INFO, "GNSS", "Attempting to stop server. Current svr.state: %d", svr.state);
+    __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "Attempting to stop server. Current svr.state: %d", svr.state);
     if (svr.state)
     {
-        const char *stop_cmds[MAXSTRRTK];
-        for (int i = 0; i < MAXSTRRTK; ++i)
-        {
-            stop_cmds[i] = NULL;
-        }
-
+        const char *stop_cmds[MAXSTRRTK] = {NULL};
         rtksvrstop(&svr, stop_cmds);
     }
 }
-
 int init_rtk_server(void)
 {
-    __android_log_print(ANDROID_LOG_ERROR, "MyTestTag", "THIS IS AN ERROR LEVEL TEST LOG");
+    __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "Initializing RTK server struct...");
     if (!rtksvrinit(&svr))
     {
-        fprintf(stderr, "RTK server initialization failed\n");
+        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "RTK server initialization failed");
         return 0;
     }
-
     return 1;
 }
 
 int start_rtk_server(void)
 {
+    char *ntrip_correction_base = "";
+    char *ntrip_ephemeris = "";
+    double lat = 0.0;
+    double lon = 0.0;
+    double alt = 0.0;
+    char errmsg[MAXERRMSG] = "";
 
-    __android_log_print(ANDROID_LOG_ERROR, "MyTestTag", "START: Entered start_rtk_server. Current svr.state: %d", svr.state);
-    int stream_types[MAXSTRRTK];
-    for (int i = 0; i < MAXSTRRTK; ++i)
-        stream_types[i] = STR_NONE;
-    stream_types[0] = STR_MEMBUF;
-    stream_types[1] = STR_NTRIPCLI;
-    // stream_types[2] = STR_NTRIPCLI;
+    int strtype[MAXSTRRTK] = {0};
+    strtype[0] = STR_MEMBUF;   // Rover
+    strtype[1] = STR_NTRIPCLI; // Base
+    strtype[2] = STR_NTRIPCLI; // Correction ephemeris
 
-    char paths_data[MAXSTRRTK][MAXSTRPATH];
     const char *paths[MAXSTRRTK];
-    for (int i = 0; i < MAXSTRRTK; ++i)
+    char paths_data[MAXSTRRTK][MAXSTRPATH] = {0};
+
+    snprintf(paths_data[1], MAXSTRPATH, "%s", ntrip_correction_base);
+    snprintf(paths_data[2], MAXSTRPATH, "%s", ntrip_ephemeris);
+    for (int i = 0; i < MAXSTRRTK; i++)
     {
-        paths_data[i][0] = '\0';
         paths[i] = paths_data[i];
     }
 
-    snprintf(paths_data[1], MAXSTRPATH, "username:password@www.sapos-bw-ntrip.de:2101/VRS_3_2G_BW");
-    __android_log_print(ANDROID_LOG_INFO, "MyTestTag", "NTRIP Path used: %s", paths[1]);
-
-    int input_formats[3];
-    input_formats[0] = STRFMT_RINEX;
-    input_formats[1] = STRFMT_RTCM3;
-    // input_formats[2] = STRFMT_RTCM3;
-
-    const char *start_commands[MAXSTRRTK];
-    const char *periodic_commands[MAXSTRRTK];
-    const char *receiver_options[MAXSTRRTK];
-
-    for (int i = 0; i < MAXSTRRTK; ++i)
-    {
-        start_commands[i] = "";
-        periodic_commands[i] = "";
-        receiver_options[i] = "";
-    }
+    int strfmt[MAXSTRRTK] = {0};
+    strfmt[0] = STRFMT_RTCM3;
+    strfmt[1] = STRFMT_RTCM3;
+    strfmt[2] = STRFMT_RTCM3;
 
     prcopt_t prcopt = prcopt_default;
     solopt_t solopt[2] = {solopt_default, solopt_default};
 
-    resetsysopts();
-    getsysopts(&prcopt, solopt, NULL);
-
+    // --- Configure prcopt ---
     prcopt.mode = PMODE_KINEMA;
-    prcopt.maxinno[0] = 30;
-    prcopt.maxinno[1] = 30;
-    prcopt.navsys = SYS_GPS | SYS_GLO | SYS_GAL;
-    prcopt.thresar[0] = 3;
-    prcopt.thresar[5] = 1.5;
-    prcopt.thresar[6] = 10;
-    prcopt.nf = 2;
-    prcopt.rovpos = POSOPT_POS_XYZ;
-
+    prcopt.navsys = SYS_GPS | SYS_GLO;
+    prcopt.nf = 1;
     prcopt.modear = ARMODE_FIXHOLD;
     prcopt.glomodear = GLO_ARMODE_ON;
-    prcopt.dynamics = 1;
-    prcopt.tidecorr = 0;
+    prcopt.elmaskar = 15.0 * D2R;
+    prcopt.sateph = EPHOPT_BRDC;
     prcopt.ionoopt = IONOOPT_BRDC;
     prcopt.tropopt = TROPOPT_SAAS;
-    prcopt.sateph = EPHOPT_BRDC;
     prcopt.posopt[0] = 0;
     prcopt.posopt[1] = 0;
     prcopt.posopt[2] = 0;
@@ -149,56 +104,228 @@ int start_rtk_server(void)
     prcopt.thresar[3] = 1e-07;
     prcopt.thresar[4] = 0.001;
     prcopt.minfix = 10;
-    prcopt.elmaskar = 15.0 * PI / 180.0;
-    prcopt.elmaskhold = 15.0 * PI / 180.0;
+    prcopt.elmaskhold = 15 * D2R;
     prcopt.thresslip = 0.2;
+    const int svrcycle = 5;
+    const int nmeacycle = 5000;
+    const int buffsize = 32768;
+    const int navsel = 0;
 
-    __android_log_print(ANDROID_LOG_DEBUG, "MyTestTag", "START: stream_types[0]=%d, paths[0]='%s', input_formats[0]=%d",
-                        stream_types[0], paths[0] ? paths[0] : "NULL", input_formats[0]);
-    __android_log_print(ANDROID_LOG_DEBUG, "MyTestTag", "START: start_commands[0]='%s'",
-                        start_commands[0] ? start_commands[0] : "NULL");
-    __android_log_print(ANDROID_LOG_DEBUG, "MyTestTag", "START: prcopt.mode=%d, prcopt.navsys=0x%X",
-                        prcopt.mode, prcopt.navsys);
+    const char *cmds[MAXSTRRTK] = {"", "", "", "", "", "", "", ""};
+    const char *cmds_periodic[MAXSTRRTK] = {"", "", "", "", "", "", "", ""};
+    const char *ropts[MAXSTRRTK] = {"", "", "", "", "", "", "", ""};
 
-    char error_message[1024] = {0};
-    __android_log_print(ANDROID_LOG_ERROR, "MyTestTag", "START: About to call rtksvrstart().");
+    const int nmeareq = 1;
+    double nmeapos_val[3] = {lat * D2R, lon * D2R, alt};
+    double npos[3];
+    pos2ecef(nmeapos_val, npos);
+    pos2ecef(nmeapos_val, prcopt.ru);
 
-    int navsel = 0;
-    int nmeacycle = 5000;                                           // 5 seconds in milliseconds
-    int nmeareq = 1;                                                // only use the starting position for NMEA output
-    double nmeapos_val[3] = {49.06806 * D2R, 9.14258 * D2R, 193.0}; // Example position in meters for NMEA pos ///TODO: Replace with actual position
-    double lla_pos[3] = {
-        49.14249870198528 * D2R, // Latitude in RADIANS
-        9.207847822934626 * D2R, // Longitude in RADIANS
-        200.0                    // Ellipsoidal Height in METERS ???
-    };
-    double ecef_pos[3]; // To store ECEF coordinates
-    pos2ecef(lla_pos, ecef_pos);
+    stream_t monitor_streams[16] = {{0}};
 
-    __android_log_print(ANDROID_LOG_INFO, "MyTestTag",
-                        "NMEA for Caster (LLH input): cycle=%dms, req_type=%d, lla_in=(%.6f, %.6f, %.1f deg/m)",
-                        nmeacycle, nmeareq, lla_pos[0] * R2D, lla_pos[1] * R2D, lla_pos[2]);
-    __android_log_print(ANDROID_LOG_INFO, "MyTestTag",
-                        "NMEA for Caster (ECEF sent to rtksvrstart): ecef_out=(%.3f, %.3f, %.3f m)",
-                        ecef_pos[0], ecef_pos[1], ecef_pos[2]);
-
-    __android_log_print(ANDROID_LOG_INFO, "MyTestTag", "NMEA for Caster: cycle=%dms, req_type=%d, pos=lla(%.6f, %.6f, %.1f deg/m)",
-                        nmeacycle, nmeareq, nmeapos_val[0] * R2D, nmeapos_val[1] * R2D, nmeapos_val[2]);
-    if (nmeareq == 0)
+    if (!rtksvrstart(&svr, svrcycle, buffsize, strtype, paths, strfmt, navsel,
+                     cmds, cmds_periodic, ropts, nmeacycle, nmeareq, npos, &prcopt, solopt,
+                     monitor_streams, errmsg))
     {
-        __android_log_print(ANDROID_LOG_WARN, "MyTestTag", "NMEA GGA to caster is DISABLED (nmeareq=0). VRS may not work!");
-    }
-    int result = rtksvrstart(&svr, 100, 32768, stream_types, paths, input_formats,
-                             navsel, start_commands, periodic_commands, receiver_options,
-                             nmeacycle, nmeareq, ecef_pos, &prcopt, solopt, NULL, error_message);
-    if (!result)
-    {
-        __android_log_print(ANDROID_LOG_ERROR, "MyTestTag", "START: rtksvrstart() FAILED. Error: %s. svr.state: %d",
-                            error_message, svr.state);
-
+        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "RTK server start error (%s)", errmsg);
         return 0;
     }
-    __android_log_print(ANDROID_LOG_INFO, "MyTestTag", "START: rtksvrstart() SUCCEEDED. Initial svr.state: %d", svr.state);
+    __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "Correcting NAV data counters post-initialization.");
 
+    __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "RTK server started successfully.");
     return 1;
+}
+
+int input_rover_observation(
+    long long gpsTimeNanos,
+    const int *svids, const int *constellationTypes, const double *cn0DbHzs,
+    const double *carrierFrequenciesHz, const double *adrMeters,
+    const int *adrStates, const double *pratesMps, const double *pseudoranges,
+    int count)
+{
+    if (!svr.state || count <= 0)
+        return 0;
+
+    double total_seconds = (double)gpsTimeNanos * 1e-9;
+    double ep_gps_start[] = {1980, 1, 6, 0, 0, 0};
+    gtime_t time_gps_start = epoch2time(ep_gps_start);
+    gtime_t obs_time = timeadd(time_gps_start, total_seconds);
+
+    obs_t rover_obs = {0};
+    rover_obs.data = (obsd_t *)calloc(count, sizeof(obsd_t));
+    if (!rover_obs.data)
+        return 0;
+
+    for (int i = 0; i < count; ++i)
+    {
+        int sys = androidToRtklibSys(constellationTypes[i]);
+        if (sys == SYS_NONE)
+            continue;
+
+        int sat = satno(sys, svids[i]);
+        if (sat == 0)
+            continue;
+
+        int freq_idx = -1;
+        uint8_t signal_code = CODE_NONE;
+
+        if (fabs(carrierFrequenciesHz[i] - FREQL1) < 1e6)
+        {
+            freq_idx = 0;
+            signal_code = CODE_L1C;
+        }
+
+        if (freq_idx < 0)
+            continue;
+
+        int k;
+        for (k = 0; k < rover_obs.n; k++)
+        {
+            if (rover_obs.data[k].sat == sat)
+                break;
+        }
+
+        if (k == rover_obs.n)
+        {
+            if (rover_obs.n >= count)
+                continue;
+            rover_obs.data[k].time = obs_time;
+            rover_obs.data[k].sat = sat;
+            rover_obs.data[k].rcv = 1;
+            rover_obs.n++;
+        }
+
+        double lam = CLIGHT / carrierFrequenciesHz[i];
+        if (lam == 0.0)
+            continue;
+
+        rover_obs.data[k].P[freq_idx] = pseudoranges[i];
+        rover_obs.data[k].L[freq_idx] = adrMeters[i] / lam;
+        rover_obs.data[k].D[freq_idx] = (float)(-pratesMps[i] / lam);
+        rover_obs.data[k].SNR[freq_idx] = (uint16_t)(cn0DbHzs[i] * 4.0 + 0.5);
+        rover_obs.data[k].code[freq_idx] = signal_code;
+
+        if (adrStates[i] & 4)
+        {
+            rover_obs.data[k].LLI[freq_idx] |= LLI_SLIP;
+        }
+    }
+
+    if (rover_obs.n == 0)
+    {
+        free(rover_obs.data);
+        return 0;
+    }
+
+    rtcm_t rtcm_gen = {0};
+    init_rtcm(&rtcm_gen);
+    rtcm_gen.time = obs_time;
+    rtcm_gen.staid = 1;
+    rtcm_gen.obs = rover_obs;
+
+    int total_bytes = 0;
+    if (gen_rtcm3(&rtcm_gen, 1077, 0, 0) > 0)
+        total_bytes += strwrite(&svr.stream[0], rtcm_gen.buff, rtcm_gen.nbyte);
+    if (gen_rtcm3(&rtcm_gen, 1087, 0, 0) > 0)
+        total_bytes += strwrite(&svr.stream[0], rtcm_gen.buff, rtcm_gen.nbyte);
+    if (gen_rtcm3(&rtcm_gen, 1097, 0, 0) > 0)
+        total_bytes += strwrite(&svr.stream[0], rtcm_gen.buff, rtcm_gen.nbyte);
+
+    rtcm_gen.obs.data = NULL;
+    free_rtcm(&rtcm_gen);
+    free(rover_obs.data);
+
+    if (total_bytes > 0)
+    {
+        __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "Wrote %d total RTCM bytes for rover.", total_bytes);
+    }
+    return total_bytes > 0;
+}
+
+int get_rtk_solution(char *buffer, int buffer_size)
+{
+    if (!buffer || buffer_size <= 0)
+    {
+        return 0;
+    }
+
+    rtksvrlock(&svr);
+
+    if (!svr.state || svr.rtk.sol.stat == SOLQ_NONE)
+    {
+        rtksvrunlock(&svr);
+        buffer[0] = '\0';
+        return 0;
+    }
+
+    sol_t *sol = &svr.rtk.sol;
+    char time_str_sol[64];
+    time2str(sol->time, time_str_sol, 3);
+
+    int len = snprintf(buffer, buffer_size,
+                       "{\"time\":\"%s\", \"status\":%d, \"num_sats\":%d, \"ratio\":%.2f, "
+                       "\"latitude\":%.9f, \"longitude\":%.9f, \"height\":%.4f, "
+                       "\"age\":%.2f}",
+                       time_str_sol, sol->stat, sol->ns, sol->ratio,
+                       sol->rr[0] * R2D, sol->rr[1] * R2D, sol->rr[2],
+                       sol->age);
+
+    rtksvrunlock(&svr);
+
+    if (len < 0 || len >= buffer_size)
+    {
+        __android_log_print(ANDROID_LOG_WARN, LOG_TAG, "Solution buffer too small. Needed: %d, Have: %d", len, buffer_size);
+        buffer[0] = '\0';
+        return -1;
+    }
+
+    return len;
+}
+
+void print_rtk_server_status_debug(void)
+{
+    rtksvrlock(&svr);
+    if (!svr.state)
+    {
+        __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "Server not active.");
+        rtksvrunlock(&svr);
+        return;
+    }
+    __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "Server active (state = %d)", svr.state);
+    __android_log_print(ANDROID_LOG_INFO, LOG_TAG,
+                        "NTRIP Stream (Base): state=%d, in_bytes=%lu, out_bytes=%lu, msg='%s'",
+                        svr.stream[1].state, (unsigned long)svr.stream[1].inb, (unsigned long)svr.stream[1].outb, svr.stream[1].msg);
+    char time_str_sol[64];
+    time2str(svr.rtk.sol.time, time_str_sol, 3);
+    __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "Solution: time=%s, status=%d, #sats=%d, ratio=%.1f",
+                        time_str_sol, svr.rtk.sol.stat, svr.rtk.sol.ns, svr.rtk.sol.ratio);
+    if (svr.rtk.sol.stat > 0)
+    {
+        __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "Solution Pos (LLH): %.8f, %.8f, %.3f",
+                            svr.rtk.sol.rr[0] * R2D, svr.rtk.sol.rr[1] * R2D, svr.rtk.sol.rr[2]);
+    }
+    __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "Rover Obs Buffer: n=%d", svr.obs[0][0].n);
+    __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "Base Obs Buffer: n=%d", svr.obs[1][0].n);
+    int common_sats = 0;
+    obs_t *rover_obs = &svr.obs[0][0];
+    obs_t *base_obs = &svr.obs[1][0];
+
+    if (rover_obs->n > 0 && base_obs->n > 0)
+    {
+        for (int i = 0; i < rover_obs->n; i++)
+        {
+            for (int j = 0; j < base_obs->n; j++)
+            {
+                if (rover_obs->data[i].sat == base_obs->data[j].sat)
+                {
+                    common_sats++;
+                    break;
+                }
+            }
+        }
+    }
+    __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "Common Satellites (Rover/Base): %d", common_sats);
+    __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "Nav Data: n=%d, ng=%d, ns=%d, nc=%d, ne=%d",
+                        svr.nav.n, svr.nav.ng, svr.nav.ns, svr.nav.nc, svr.nav.ne);
+    rtksvrunlock(&svr);
 }

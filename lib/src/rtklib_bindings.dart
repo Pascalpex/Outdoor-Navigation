@@ -1,154 +1,178 @@
 // rtklib_bindings.dart
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ffi' as ffi;
 import 'dart:io' show Platform;
+import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
-import 'package:outdoor_navigation/src/gnss_plugin.dart';
 
-const int maxStrmsg = 1024;
-const int ntripDataPeekSize = 128;
+const int maxOutputBuffer = 8192; // Maximum buffer size for the solution output
 
-final class RtkNtripDebugInfoStruct extends ffi.Struct {
-  @ffi.Int32()
-  external int stream_state;
+// --- Native Function Signatures (Typedefs) for the new direct injection method ---
 
-  // For char arrays, we use an Array of Uint8
-  // This requires a bit of care when accessing as a String.
-  @ffi.Array(maxStrmsg) // Size of the array
-  external ffi.Array<ffi.Uint8> _stream_msg_bytes;
+// --- Typedefs for basic server control and status (remain the same) ---
+typedef _StopServerNative = ffi.Void Function();
+typedef _InitServerNative = ffi.Int32 Function();
+typedef _StartServerNative = ffi.Int32 Function();
+typedef _PrintServerStatusNative = ffi.Void Function();
+typedef _InputRoverObsNative =
+    ffi.Int32 Function(
+      ffi.Int64,
+      ffi.Pointer<ffi.Int32>,
+      ffi.Pointer<ffi.Int32>,
+      ffi.Pointer<ffi.Double>,
+      ffi.Pointer<ffi.Double>,
+      ffi.Pointer<ffi.Double>,
+      ffi.Pointer<ffi.Int32>,
+      ffi.Pointer<ffi.Double>,
+      ffi.Pointer<ffi.Double>,
+      ffi.Int32,
+    );
+typedef _GetRtkSolutionNative = ffi.Int32 Function(ffi.Pointer<ffi.Uint8>, ffi.Int32);
 
-  @ffi.Int32()
-  external int bytes_in_server_buffer;
-
-  @ffi.Int32()
-  external int bytes_peeked;
-
-  @ffi.Array(ntripDataPeekSize)
-  external ffi.Array<ffi.Uint8> _data_peek_buffer_bytes;
-
-  @ffi.Int32()
-  external int rtk_server_state;
-
-  // Helper to get stream_msg as a Dart String
-  String get stream_msg {
-    final List<int> charCodes = [];
-    for (int i = 0; i < maxStrmsg; i++) {
-      if (_stream_msg_bytes[i] == 0) break; // Null terminator
-      charCodes.add(_stream_msg_bytes[i]);
-    }
-    return String.fromCharCodes(charCodes);
-  }
-
-  // Helper to get data_peek_buffer as a List<int> (Uint8List)
-  List<int> get data_peek_buffer {
-    final List<int> data = [];
-    for (int i = 0; i < bytes_peeked; i++) {
-      // Only read up to bytes_peeked
-      data.add(_data_peek_buffer_bytes[i]);
-    }
-    return data;
-  }
-}
-
-// Signature of the C function: void get_rtk_ntrip_debug_info(RtkNtripDebugInfo* debug_info);
-typedef GetRtkNtripDebugInfoNative = ffi.Void Function(ffi.Pointer<RtkNtripDebugInfoStruct> debugInfo);
-// Signature of the Dart function
-typedef GetRtkNtripDebugInfoDart = void Function(ffi.Pointer<RtkNtripDebugInfoStruct> debugInfo);
-
-// Native function signature
-typedef StopServerNativ = ffi.Void Function();
-typedef InitServerNativ = ffi.Int Function();
-typedef StartServerNativ = ffi.Int Function();
-
-// Dart function signature
 typedef StopServerDart = void Function();
 typedef InitServerDart = int Function();
 typedef StartServerDart = int Function();
+typedef PrintServerStatusDart = void Function();
+typedef InputRoverObsDart =
+    int Function(
+      int,
+      ffi.Pointer<ffi.Int32>,
+      ffi.Pointer<ffi.Int32>,
+      ffi.Pointer<ffi.Double>,
+      ffi.Pointer<ffi.Double>,
+      ffi.Pointer<ffi.Double>,
+      ffi.Pointer<ffi.Int32>,
+      ffi.Pointer<ffi.Double>,
+      ffi.Pointer<ffi.Double>,
+      int,
+    );
+typedef GetRtkSolutionDart = int Function(ffi.Pointer<ffi.Uint8>, int);
 
+/// Manages the FFI bridge to the native RTKLIB wrapper library.
+/// This class handles server initialization, data processing, and state management.
 class RtklibBindings {
-  late final StopServerDart _stopServer;
+  // --- FFI Function Pointers ---
   late final InitServerDart _initServer;
   late final StartServerDart _startServer;
-  late final GetRtkNtripDebugInfoDart _getRtkNtripDebugInfo;
-  Timer? _debugPollingTimer;
+  late final StopServerDart _stopServer;
+  late final PrintServerStatusDart _printServerStatus;
+  late final InputRoverObsDart _inputRoverObservation;
+  late final GetRtkSolutionDart _getRtkSolution;
+
+  // Persistent buffer for reading solution data from the C++ layer
+  final _readBuffer = calloc<ffi.Uint8>(maxOutputBuffer);
 
   late final ffi.DynamicLibrary _dylib;
 
-  RtklibBindings({String? libraryPath}) {
+  RtklibBindings() {
     _dylib = ffi.DynamicLibrary.open(_getLibraryPath());
 
-    _stopServer = _dylib.lookup<ffi.NativeFunction<StopServerNativ>>('stop_rtk_server').asFunction<StopServerDart>();
-    _initServer = _dylib.lookup<ffi.NativeFunction<InitServerNativ>>('init_rtk_server').asFunction<InitServerDart>();
-    _startServer = _dylib.lookup<ffi.NativeFunction<StartServerNativ>>('start_rtk_server').asFunction<StartServerDart>();
-    _getRtkNtripDebugInfo = _dylib.lookup<ffi.NativeFunction<GetRtkNtripDebugInfoNative>>('get_rtk_ntrip_debug_info').asFunction<GetRtkNtripDebugInfoDart>();
+    // Look up all the required C functions
+    _initServer = _dylib.lookup<ffi.NativeFunction<_InitServerNative>>('init_rtk_server').asFunction<InitServerDart>();
+    _stopServer = _dylib.lookup<ffi.NativeFunction<_StopServerNative>>('stop_rtk_server').asFunction<StopServerDart>();
+    _startServer = _dylib.lookup<ffi.NativeFunction<_StartServerNative>>('start_rtk_server').asFunction<StartServerDart>();
+    _printServerStatus = _dylib.lookup<ffi.NativeFunction<_PrintServerStatusNative>>('print_rtk_server_status_debug').asFunction<PrintServerStatusDart>();
+    _inputRoverObservation = _dylib.lookup<ffi.NativeFunction<_InputRoverObsNative>>('input_rover_observation').asFunction<InputRoverObsDart>();
+    _getRtkSolution = _dylib.lookup<ffi.NativeFunction<_GetRtkSolutionNative>>('get_rtk_solution').asFunction<GetRtkSolutionDart>();
   }
 
   static String _getLibraryPath() {
-    if (Platform.isMacOS) return 'libgnss_rtklib.dylib';
-    if (Platform.isWindows) return 'gnss_rtklib.dll';
-    // Assume Linux or other Unix-like for the .so extension
-    return 'libgnss_rtklib.so';
+    if (Platform.isAndroid) return 'libgnss_rtklib.so';
+    if (Platform.isIOS || Platform.isMacOS) return 'libgnss_rtklib.dylib';
+    if (Platform.isWindows) return 'libgnss_rtklib.dll';
+    return 'libgnss_rtklib.so'; // Default for other Unix-like systems
   }
 
-  void stopServer() {
-    _stopServer();
-    print("server stopped");
-  }
-
+  /// Initializes the RTK server. Must be called before starting.
   void initServer() {
-    print(_initServer());
-    print("server initialized");
+    final result = _initServer();
+    print("RTKLIB: Server initialized with result: $result");
   }
 
+  /// Starts the RTK server thread and connects to the NTRIP caster.
   void startServer() {
-    _initServer();
     final int result = _startServer();
     if (result == 0) {
-      print("Failed to start RTK Server via FFI. Result: $result");
+      print("RTKLIB: Failed to start or stabilize RTK Server via FFI.");
       return;
     }
-    print("RTK Server started successfully via FFI.");
-    ffi.Pointer<RtkNtripDebugInfoStruct>? _debugInfoPointer = calloc<RtkNtripDebugInfoStruct>();
-    _debugPollingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      print("Timer tick: ${timer.tick}");
-      if (_debugInfoPointer == null) return;
+    print("RTKLIB: Server started successfully via FFI.");
+  }
 
-      // Call the C function, passing the pointer to our allocated struct
-      _getRtkNtripDebugInfo(_debugInfoPointer!);
+  /// Stops the RTK server thread and disconnects streams.
+  void stopServer() {
+    _stopServer();
+    print("RTKLIB: Server stop command issued.");
+  }
 
-      // Access the fields from the struct pointed to by _debugInfoPointer
-      // The .ref property dereferences the pointer to get the struct instance
-      final RtkNtripDebugInfoStruct info = _debugInfoPointer!.ref;
+  void processGnssData(Map<String, dynamic> gnssData) {
+    ffi.Pointer<ffi.Int32> svidsPtr = ffi.nullptr;
+    ffi.Pointer<ffi.Int32> constsPtr = ffi.nullptr;
+    ffi.Pointer<ffi.Double> cn0sPtr = ffi.nullptr;
+    ffi.Pointer<ffi.Double> freqsPtr = ffi.nullptr;
+    ffi.Pointer<ffi.Double> adrsPtr = ffi.nullptr;
+    ffi.Pointer<ffi.Int32> adrStatesPtr = ffi.nullptr;
+    ffi.Pointer<ffi.Double> pratesPtr = ffi.nullptr;
+    ffi.Pointer<ffi.Double> prsPtr = ffi.nullptr;
 
-      print("--- RTK Debug Poll ---");
-      print("RTK Server State: ${info.rtk_server_state}");
-      print("NTRIP Stream State: ${info.stream_state}");
-      print("NTRIP Stream Msg: '${info.stream_msg}'"); // Uses the getter
-      print("NTRIP Bytes in Svr Buffer: ${info.bytes_in_server_buffer}");
+    try {
+      final gpsTimeNanos = gnssData['gpsTimeNanos'] as int;
+      final svids = gnssData['svids'] as Int32List;
+      final consts = gnssData['constellationTypes'] as Int32List;
+      final cn0s = gnssData['cn0DbHzs'] as Float64List;
+      final freqs = gnssData['carrierFrequenciesHz'] as Float64List;
+      final adrs = gnssData['accumulatedDeltaRangeMeters'] as Float64List;
+      final adrStates = gnssData['accumulatedDeltaRangeStates'] as Int32List;
+      final prates = gnssData['pseudorangeRateMetersPerSecond'] as Float64List;
+      final prs = gnssData['pseudoranges'] as Float64List;
 
-      if (info.bytes_peeked > 0) {
-        final List<int> dataBytes = info.data_peek_buffer; // Uses the getter
-        String hexString = "";
-        for (int byteVal in dataBytes) {
-          hexString += "${byteVal.toRadixString(16).padLeft(2, '0').toUpperCase()} ";
-        }
-        print("NTRIP Data Peek (${info.bytes_peeked} bytes): $hexString");
-      } else if (info.stream_state == 1 /* OPEN */ && info.bytes_in_server_buffer == 0) {
-        print("NTRIP stream open, but no data in server buffer yet.");
+      // Allocate memory on the native heap and copy data from Dart lists
+      svidsPtr = calloc<ffi.Int32>(svids.length)..asTypedList(svids.length).setAll(0, svids);
+      constsPtr = calloc<ffi.Int32>(consts.length)..asTypedList(consts.length).setAll(0, consts);
+      cn0sPtr = calloc<ffi.Double>(cn0s.length)..asTypedList(cn0s.length).setAll(0, cn0s);
+      freqsPtr = calloc<ffi.Double>(freqs.length)..asTypedList(freqs.length).setAll(0, freqs);
+      adrsPtr = calloc<ffi.Double>(adrs.length)..asTypedList(adrs.length).setAll(0, adrs);
+      adrStatesPtr = calloc<ffi.Int32>(adrStates.length)..asTypedList(adrStates.length).setAll(0, adrStates);
+      pratesPtr = calloc<ffi.Double>(prates.length)..asTypedList(prates.length).setAll(0, prates);
+      prsPtr = calloc<ffi.Double>(prs.length)..asTypedList(prs.length).setAll(0, prs);
+
+      _inputRoverObservation(gpsTimeNanos, svidsPtr, constsPtr, cn0sPtr, freqsPtr, adrsPtr, adrStatesPtr, pratesPtr, prsPtr, svids.length);
+    } finally {
+      if (svidsPtr != ffi.nullptr) calloc.free(svidsPtr);
+      if (constsPtr != ffi.nullptr) calloc.free(constsPtr);
+      if (cn0sPtr != ffi.nullptr) calloc.free(cn0sPtr);
+      if (freqsPtr != ffi.nullptr) calloc.free(freqsPtr);
+      if (adrsPtr != ffi.nullptr) calloc.free(adrsPtr);
+      if (adrStatesPtr != ffi.nullptr) calloc.free(adrStatesPtr);
+      if (pratesPtr != ffi.nullptr) calloc.free(pratesPtr);
+      if (prsPtr != ffi.nullptr) calloc.free(prsPtr);
+    }
+  }
+
+  void printServerStatus() => _printServerStatus();
+
+  Map<String, dynamic>? getLatestSolution() {
+    final int length = _getRtkSolution(_readBuffer, maxOutputBuffer);
+
+    if (length <= 0) {
+      if (length < 0) {
+        print("RTKLIB: Error getting solution from native layer (e.g., buffer too small).");
       }
-      print("----------------------");
+      return null;
+    }
 
-      if (info.rtk_server_state == 0) {
-        print("RTK Server has stopped. Stopping debug poll.");
-        _debugPollingTimer?.cancel();
-        _debugPollingTimer = null;
-        if (_debugInfoPointer != null) {
-          calloc.free(_debugInfoPointer!);
-          _debugInfoPointer = null;
-        }
-        print("RTK debug polling stopped.");
-      }
-    });
+    try {
+      final solutionString = utf8.decode(_readBuffer.asTypedList(length));
+      return json.decode(solutionString) as Map<String, dynamic>;
+    } catch (e) {
+      print("RTKLIB: Failed to parse solution JSON from native layer: $e");
+      return null;
+    }
+  }
+
+  void dispose() {
+    calloc.free(_readBuffer);
   }
 }

@@ -75,37 +75,23 @@ add_library(gnss_rtklib SHARED
 )
 
 # --- Compiler Configuration ---
-
-# Base compiler options for all build types.
-set(COMMON_COMPILE_OPTIONS
-        -std=c99        # C99 standard.
-        -Wall           # All standard warnings.
-        -pedantic       # Strict ISO C warnings.
-        # RTKLIB specific definitions:
-        -DENAGLO        # Enable GLONASS.
-        -DENAGAL        # Enable Galileo.
-        -DNFREQ=3       # Max carrier frequencies.
-        -DNEXOBS=3      # Max extended observation types.
-        -DSVR_REUSEADD  # Enable SO_REUSEADDR for server.
-)
-
-# Debug build specific options.
-set(DEBUG_COMPILE_OPTIONS
-        -Og             # Optimize for debugging.
-        -g              # Generate debug info.
-        -DTRACE         # Enable RTKLIB trace output.
-)
-
-# Release build specific options.
-set(RELEASE_COMPILE_OPTIONS
-        -O3             # High optimization level.
-)
+add_compile_definitions(
+        ENAGLO        # Enable GLONASS.
+        ENAGAL        # Enable Galileo.
+        DNFREQ=3      # Max carrier frequencies.
+        NEXOBS=3      # Max extended observation types. <<< SET TO 3
+        DSVR_REUSEADD # Enable SO_REUSEADDR for server.
+        # Optional but recommended for portability
+)       
 
 # Apply compiler options (common + build-type specific) to the target.
 target_compile_options(gnss_rtklib PRIVATE
-        ${COMMON_COMPILE_OPTIONS}
-        $<$<CONFIG:Debug>:${DEBUG_COMPILE_OPTIONS}>
-        $<$<CONFIG:Release>:${RELEASE_COMPILE_OPTIONS}>
+        -std=c99        # C99 standard.
+        -Wall           # All standard warnings.
+        -pedantic
+
+        $<$<CONFIG:Debug>:-Og -g -DTRACE>
+        $<$<CONFIG:Release>:-O3>
 )
 
 # --- Include Directories ---
