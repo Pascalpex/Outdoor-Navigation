@@ -5,8 +5,6 @@ import 'package:location/location.dart';
 import 'package:outdoor_navigation/outdoor_navigation.dart';
 import 'package:outdoor_navigation/src/abstract_outdoor_navigation.dart';
 import 'package:outdoor_navigation/src/gnss_plugin.dart';
-import 'package:outdoor_navigation/src/model/gnss_satelite.dart';
-import 'package:outdoor_navigation/src/model/nmea_message.dart';
 import 'package:outdoor_navigation/src/rtklib_bindings.dart';
 
 class OutdoorNavigationImpl implements OutdoorNavigation {
@@ -19,8 +17,6 @@ class OutdoorNavigationImpl implements OutdoorNavigation {
   StreamSubscription? _rawMeasurementsSubscription;
 
   Timer? _solutionPollingTimer;
-
-  final _rtkSolutionController = StreamController<String>.broadcast();
 
   OutdoorNavigationImpl() {
     _bindings = RtklibBindings();

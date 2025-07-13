@@ -79,10 +79,9 @@ class RtklibBindings {
   }
 
   static String _getLibraryPath() {
-    if (Platform.isAndroid) return 'libgnss_rtklib.so';
-    if (Platform.isIOS || Platform.isMacOS) return 'libgnss_rtklib.dylib';
-    if (Platform.isWindows) return 'libgnss_rtklib.dll';
-    return 'libgnss_rtklib.so'; // Default for other Unix-like systems
+    if (Platform.isMacOS) return 'libgnss_rtklib.dylib';
+    if (Platform.isWindows) return 'gnss_rtklib.dll';
+    return 'libgnss_rtklib.so';
   }
 
   /// Initializes the RTK server. Must be called before starting.

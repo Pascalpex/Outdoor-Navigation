@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:latlong2/latlong.dart'; // We'll need this for the location type
-import 'package:outdoor_navigation/outdoor_navigation.dart'; // Your main package import
+import 'package:latlong2/latlong.dart';
+import 'package:outdoor_navigation/outdoor_navigation.dart';
 
 void main() {
   runApp(const MainApp());
