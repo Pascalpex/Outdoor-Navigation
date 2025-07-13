@@ -1,5 +1,4 @@
 import 'package:latlong2/latlong.dart';
-import 'package:outdoor_navigation/outdoor_navigation.dart';
 
 /// The OutdoorNavigation class provides all outdoor related location services.
 ///
@@ -9,6 +8,9 @@ abstract class OutdoorNavigation {
   ///
   /// Will ask for permission on first usage.
   Future<LatLng?> getLocation();
+
   void showLogs();
+
+  /// disposes all resources used by the OutdoorNavigation instance.
   void dispose();
 }

@@ -27,9 +27,6 @@ class GnssPlugin : FlutterPlugin, ActivityAware {
     private lateinit var nmeaEventChannel: EventChannel
     private var nmeaEventSink: EventChannel.EventSink? = null
 
-
-
-
     private var context: Context? = null
     private var activity: Activity? = null
     private lateinit var locationManager: LocationManager

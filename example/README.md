@@ -1,6 +1,6 @@
 # Example: Outdoor Navigation Usage
 
-This example Flutter app demonstrates how to use the [`outdoor_navigation`](lib/outdoor_navigation.dart) package to access the user's current location.
+This example Flutter app demonstrates how to use the [`outdoor_navigation`](/lib/outdoor_navigation.dart) package to access the user's current location.
 
 ## Usage
 
@@ -24,4 +24,4 @@ The package handles all background location updates and calculations for you. Yo
 
 ## Example
 
-See [`example/lib/main.dart`](example/lib/main.dart) for a complete usage example.
+See [`lib/main.dart`](lib/main.dart) for a complete usage example.
