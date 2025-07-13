@@ -1,0 +1,22 @@
+-- The C compiler identification is Clang 18.0.1
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: C:/Users/Timo/AppData/Local/Android/Sdk/ndk/27.0.12077973/toolchains/llvm/prebuilt/windows-x86_64/bin/clang.exe - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Populating rtklib_sources
+-- Configuring done
+-- Generating done
+-- Build files have been written to: C:/Users/Timo/Hochschule/6. Semester/MDMA/Outdoor-Navigation/android/.cxx/Debug/4t6a6h3f/x86/_deps/rtklib_sources-subbuild
+[1/9] Creating directories for 'rtklib_sources-populate'
+[1/9] Performing download step (git clone) for 'rtklib_sources-populate'
+[2/9] Performing update step for 'rtklib_sources-populate'
+[4/9] No patch step for 'rtklib_sources-populate'
+[5/9] No configure step for 'rtklib_sources-populate'
+[6/9] No build step for 'rtklib_sources-populate'
+[7/9] No install step for 'rtklib_sources-populate'
+[8/9] No test step for 'rtklib_sources-populate'
+[9/9] Completed 'rtklib_sources-populate'
+-- Configuring done
+-- Generating done
+-- Build files have been written to: C:/Users/Timo/Hochschule/6. Semester/MDMA/Outdoor-Navigation/android/.cxx/Debug/4t6a6h3f/x86

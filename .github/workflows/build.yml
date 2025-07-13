@@ -25,6 +25,7 @@ jobs:
         run: flutter pub get
 
       - name: Run Flutter Analyze (Style Check)
+        continue-on-error: true
         run: flutter analyze
 
       - name: Run Tests

@@ -8,4 +8,9 @@ abstract class OutdoorNavigation {
   ///
   /// Will ask for permission on first usage.
   Future<LatLng?> getLocation();
+
+  void showLogs();
+
+  /// disposes all resources used by the OutdoorNavigation instance.
+  void dispose();
 }

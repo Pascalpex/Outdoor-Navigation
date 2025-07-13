@@ -4,42 +4,69 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
+import android.location.GnssClock
+import android.location.GnssMeasurement
 import android.location.GnssMeasurementsEvent
 import android.location.LocationManager
+import android.location.OnNmeaMessageListener
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.EventChannel
 
-class GnssPlugin : FlutterPlugin, EventChannel.StreamHandler, ActivityAware {
-    private lateinit var eventChannel: EventChannel
-    private var eventSink: EventChannel.EventSink? = null
+private const val CLIGHT = 299792458.0
+private const val GPS_WEEK_SECS = 604800
+
+
+class GnssPlugin : FlutterPlugin, ActivityAware {
+    private lateinit var androidRawEventChannel: EventChannel
+    private var androidRawEventSink: EventChannel.EventSink? = null
+
+    private lateinit var nmeaEventChannel: EventChannel
+    private var nmeaEventSink: EventChannel.EventSink? = null
 
     private var context: Context? = null
     private var activity: Activity? = null
     private lateinit var locationManager: LocationManager
+
     private lateinit var gnssCallback: GnssMeasurementsEvent.Callback
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
 
-        eventChannel = EventChannel(binding.binaryMessenger, "gnss_plugin/raw_stream")
-        eventChannel.setStreamHandler(this)
+        androidRawEventChannel = EventChannel(binding.binaryMessenger, "gnss_plugin/raw_stream")
+        androidRawEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                androidRawEventSink = events
+                startGnssListening()
+            }
+
+            override fun onCancel(arguments: Any?) {
+                androidRawEventSink = null
+                stopGnssListening()
+            }
+        })
+
+        nmeaEventChannel = EventChannel(binding.binaryMessenger, "gnss_plugin/nmea_stream")
+        nmeaEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                nmeaEventSink = events
+            }
+
+            override fun onCancel(arguments: Any?) {
+                nmeaEventSink = null
+            }
+        })
+
+
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         stopGnssListening()
-        eventChannel.setStreamHandler(null)
-    }
-
-    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-        eventSink = events
-        startGnssListening()
-    }
-
-    override fun onCancel(arguments: Any?) {
-        stopGnssListening()
+        androidRawEventChannel.setStreamHandler(null)
+        nmeaEventChannel.setStreamHandler(null)
     }
 
     private fun startGnssListening() {
@@ -52,51 +79,92 @@ class GnssPlugin : FlutterPlugin, EventChannel.StreamHandler, ActivityAware {
         }
 
         locationManager = act.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-
         gnssCallback = object : GnssMeasurementsEvent.Callback() {
             override fun onGnssMeasurementsReceived(event: GnssMeasurementsEvent) {
-                val measurements = event.measurements.map {
-                    mapOf(
-                        "svid" to it.svid,
-                        "cn0DbHz" to it.cn0DbHz,
-                        "constellationType" to it.constellationType,
-                        "pseudorangeRateMetersPerSecond" to it.pseudorangeRateMetersPerSecond,
-                        "accumulatedDeltaRangeMeters" to it.accumulatedDeltaRangeMeters,
-                        "accumulatedDeltaRangeState" to it.accumulatedDeltaRangeState,
-                        "accumulatedDeltaRangeUncertaintyMeters" to it.accumulatedDeltaRangeUncertaintyMeters,
-                        "basebandCn0DbHz" to it.basebandCn0DbHz,
-                        "carrierFrequencyHz" to it.carrierFrequencyHz,
-                        "codeType" to it.codeType,
-                        "fullInterSignalBiasNanos" to it.fullInterSignalBiasNanos,
-                        "fullInterSignalBiasUncertaintyNanos" to it.fullInterSignalBiasUncertaintyNanos,
-                        "multipathIndicator" to it.multipathIndicator,
-                        "pseudorangeRateUncertaintyMetersPerSecond" to it.pseudorangeRateUncertaintyMetersPerSecond,
-                        "receivedSvTimeNanos" to it.receivedSvTimeNanos,
-                        "receivedSvTimeUncertaintyNanos" to it.receivedSvTimeUncertaintyNanos,
-                        "satelliteInterSignalBiasNanos" to it.satelliteInterSignalBiasNanos,
-                        "satelliteInterSignalBiasUncertaintyNanos" to it.satelliteInterSignalBiasUncertaintyNanos,
-                        "snrInDb" to it.snrInDb,
-                        "state" to it.state,
-                        "timeOffsetNanos" to it.timeOffsetNanos
-                    )
+                if (androidRawEventSink == null) return
+
+                val clock: GnssClock = event.clock
+                val measurements: Collection<GnssMeasurement> = event.measurements
+
+                if (!clock.hasFullBiasNanos()) {
+                    Log.w("GnssPlugin", "No FullBiasNanos, cannot calculate pseudoranges.")
+                    return
                 }
 
-                val data = mapOf("measurements" to measurements)
+                val validMeasurements = measurements.filter {
+                    it.hasCarrierFrequencyHz() && (it.state and GnssMeasurement.STATE_TOW_DECODED) != 0
+                }
+                val count = validMeasurements.size
+                if (count == 0) return
+
+                val svids = IntArray(count)
+                val constellationTypes = IntArray(count)
+                val cn0DbHzs = DoubleArray(count)
+                val carrierFrequenciesHz = DoubleArray(count)
+                val adrMeters = DoubleArray(count)
+                val adrStates = IntArray(count)
+                val pratesMps = DoubleArray(count)
+                val pseudoranges = DoubleArray(count)
+
+                val rxGpsTimeNanos =
+                    clock.timeNanos - (clock.fullBiasNanos + (clock.biasNanos ?: 0.0))
+
+                val rxTowNanos = rxGpsTimeNanos % (GPS_WEEK_SECS * 1_000_000_000L)
+
+                validMeasurements.forEachIndexed { i, m ->
+                    val txTowNanos = m.receivedSvTimeNanos
+
+                    var prNanos = rxTowNanos - txTowNanos
+
+                    prNanos -= m.timeOffsetNanos
+
+                    val weekInNanos = GPS_WEEK_SECS * 1_000_000_000L
+                    if (prNanos > weekInNanos / 2.0) {
+                        prNanos -= weekInNanos
+                    } else if (prNanos < -weekInNanos / 2.0) {
+                        prNanos += weekInNanos
+                    }
+
+                    pseudoranges[i] = prNanos * 1e-9 * CLIGHT
+
+                    svids[i] = m.svid
+                    constellationTypes[i] = m.constellationType
+                    cn0DbHzs[i] = m.cn0DbHz.toDouble()
+                    carrierFrequenciesHz[i] = m.carrierFrequencyHz.toDouble()
+                    adrMeters[i] = m.accumulatedDeltaRangeMeters
+                    adrStates[i] = m.accumulatedDeltaRangeState
+                    pratesMps[i] = m.pseudorangeRateMetersPerSecond
+                }
+
+                val absoluteGpsTimeNanos: Long = clock.timeNanos - clock.fullBiasNanos
+
+                val data = mapOf<String, Any>(
+                    "gpsTimeNanos" to absoluteGpsTimeNanos,
+                    "svids" to svids,
+                    "constellationTypes" to constellationTypes,
+                    "cn0DbHzs" to cn0DbHzs,
+                    "carrierFrequenciesHz" to carrierFrequenciesHz,
+                    "accumulatedDeltaRangeMeters" to adrMeters,
+                    "accumulatedDeltaRangeStates" to adrStates,
+                    "pseudorangeRateMetersPerSecond" to pratesMps,
+                    "pseudoranges" to pseudoranges
+                )
 
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    eventSink?.success(data)
+                    androidRawEventSink?.success(data)
                 }
             }
         }
-
-        locationManager.registerGnssMeasurementsCallback(gnssCallback)
+            locationManager.registerGnssMeasurementsCallback(gnssCallback)
     }
 
     private fun stopGnssListening() {
         if (::locationManager.isInitialized && ::gnssCallback.isInitialized) {
             locationManager.unregisterGnssMeasurementsCallback(gnssCallback)
+            locationManager.removeNmeaListener(nmeaListener)
         }
-        eventSink = null
+        androidRawEventSink = null
+        nmeaEventSink = null
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
@@ -113,5 +181,15 @@ class GnssPlugin : FlutterPlugin, EventChannel.StreamHandler, ActivityAware {
 
     override fun onDetachedFromActivityForConfigChanges() {
         activity = null
+    }
+
+    private val nmeaListener: OnNmeaMessageListener = object : OnNmeaMessageListener {
+        override fun onNmeaMessage(message: String?, timestamp: Long) {
+            message?.let {
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    nmeaEventSink?.success(mapOf("timestamp" to timestamp, "message" to it))
+                }
+            }
+        }
     }
 }
