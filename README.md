@@ -103,7 +103,7 @@ The header file [`rtklib_wrapper.h`](lib/src/library/my_interface/rtklib_wrapper
 ### C Wrapper Configuration
 
 **Important:**  
-When using the native wrapper (`rtklib_wrapper.c`), you must manually configure the first four lines in the `start_rtk_server` function to match your NTRIP credentials, mountpoints, and reference position:
+When using the native wrapper (`rtklib_wrapper.c`), you must manually configure the `start_rtk_server` function to match your NTRIP credentials, mountpoints, and reference position:
 
 ```c
 char *ntrip_correction_base = "...";
