@@ -1,4 +1,4 @@
-package com.example.example
+package de.hhn.outdoor_navigation_example
 
 import io.flutter.embedding.android.FlutterActivity
 
